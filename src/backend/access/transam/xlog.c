@@ -44,6 +44,7 @@
 #include "commands/tablespace.h"
 #include "common/controldata_utils.h"
 #include "executor/instrument.h"
+#include "crypto/kmgr.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
 #include "pgstat.h"
@@ -80,6 +81,7 @@
 #include "utils/timestamp.h"
 
 extern uint32 bootstrap_data_checksum_version;
+extern uint32 bootstrap_key_management_version;
 
 /* Unsupported old recovery command file names (relative to $PGDATA) */
 #define RECOVERY_COMMAND_FILE	"recovery.conf"
@@ -4606,6 +4608,7 @@ InitControlFile(uint64 sysidentifier)
 	ControlFile->wal_log_hints = wal_log_hints;
 	ControlFile->track_commit_timestamp = track_commit_timestamp;
 	ControlFile->data_checksum_version = bootstrap_data_checksum_version;
+	ControlFile->key_management_version = bootstrap_key_management_version;
 }
 
 static void
@@ -4893,6 +4896,9 @@ ReadControlFile(void)
 	/* Make the initdb settings visible as GUC variables, too */
 	SetConfigOption("data_checksums", DataChecksumsEnabled() ? "yes" : "no",
 					PGC_INTERNAL, PGC_S_OVERRIDE);
+
+	SetConfigOption("key_management", KeyManagementEnabled() ? "yes" : "no",
+					PGC_INTERNAL, PGC_S_OVERRIDE);
 }
 
 /*
@@ -4933,6 +4939,16 @@ DataChecksumsEnabled(void)
 {
 	Assert(ControlFile != NULL);
 	return (ControlFile->data_checksum_version > 0);
+}
+
+/*
+ * Are key management enabled?
+ */
+bool
+KeyManagementEnabled(void)
+{
+	Assert(ControlFile != NULL);
+	return (ControlFile->key_management_version > 0);
 }
 
 /*
@@ -5341,6 +5357,10 @@ BootStrapXLOG(void)
 
 	/* some additional ControlFile fields are set in WriteControlFile() */
 	WriteControlFile();
+
+	/* Enable key manager if required */
+	if (ControlFile->key_management_version > 0)
+		BootStrapKmgr();
 
 	/* Bootstrap the commit log, too */
 	BootStrapCLOG();
