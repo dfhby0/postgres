@@ -326,6 +326,7 @@ end_heap_rewrite(RewriteState state)
 						true);
 		RelationOpenSmgr(state->rs_new_rel);
 
+		PageEncryptInplace(state->rs_buffer, MAIN_FORKNUM, state->rs_blockno);
 		PageSetChecksumInplace(state->rs_buffer, state->rs_blockno);
 
 		smgrextend(state->rs_new_rel->rd_smgr, MAIN_FORKNUM, state->rs_blockno,
@@ -689,6 +690,7 @@ raw_heap_insert(RewriteState state, HeapTuple tup)
 			 * ourselves in end_heap_rewrite.
 			 */
 			RelationOpenSmgr(state->rs_new_rel);
+			PageEncryptInplace(page, MAIN_FORKNUM, state->rs_blockno);
 
 			PageSetChecksumInplace(page, state->rs_blockno);
 

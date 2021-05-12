@@ -207,6 +207,7 @@ struct XLogReaderState
 	 */
 	char	   *readBuf;
 	uint32		readLen;
+	bool		encrypted;	/* readBuf is encrypted? */
 
 	/* last read XLOG position for data currently in readBuf */
 	WALSegmentContext segcxt;

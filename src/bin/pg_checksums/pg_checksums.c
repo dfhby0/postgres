@@ -113,6 +113,7 @@ static const struct exclude_list_item skip[] = {
 	{"pg_control", false},
 	{"pg_filenode.map", false},
 	{"pg_internal.init", true},
+	{"pg_kmgr", false},
 	{"PG_VERSION", false},
 #ifdef EXEC_BACKEND
 	{"config_exec_params", true},

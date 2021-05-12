@@ -15,6 +15,7 @@
 #define BUFPAGE_H
 
 #include "access/xlogdefs.h"
+#include "common/relpath.h"
 #include "storage/block.h"
 #include "storage/item.h"
 #include "storage/off.h"
@@ -165,6 +166,8 @@ typedef struct PageHeaderData
 
 typedef PageHeaderData *PageHeader;
 
+#define PageEncryptOffset		offsetof(PageHeaderData, pd_linp)
+#define SizeOfPageEncryption	(BLCKSZ - PageEncryptOffset)
 /*
  * pd_flags contains the following flag bits.  Undefined bits are initialized
  * to zero and may be used in the future.
@@ -429,7 +432,7 @@ StaticAssertDecl(BLCKSZ == ((BLCKSZ / sizeof(size_t)) * sizeof(size_t)),
 				 "BLCKSZ has to be a multiple of sizeof(size_t)");
 
 extern void PageInit(Page page, Size pageSize, Size specialSize);
-extern bool PageIsVerified(Page page, BlockNumber blkno);
+extern bool PageIsVerified(Page page, ForkNumber forknum, BlockNumber blkno);
 extern OffsetNumber PageAddItemExtended(Page page, Item item, Size size,
 										OffsetNumber offsetNumber, int flags);
 extern Page PageGetTempPage(Page page);
@@ -448,5 +451,8 @@ extern bool PageIndexTupleOverwrite(Page page, OffsetNumber offnum,
 									Item newtup, Size newsize);
 extern char *PageSetChecksumCopy(Page page, BlockNumber blkno);
 extern void PageSetChecksumInplace(Page page, BlockNumber blkno);
+extern char *PageEncryptCopy(Page page, ForkNumber forknum, BlockNumber blkno);
+extern void PageEncryptInplace(Page page, ForkNumber forknum, BlockNumber blkno);
+extern void PageDecryptInplace(Page page, ForkNumber forknum, BlockNumber blkno);
 
 #endif							/* BUFPAGE_H */
