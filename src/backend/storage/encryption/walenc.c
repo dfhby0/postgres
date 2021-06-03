@@ -121,7 +121,7 @@ EncryptXLog(char *page, Size nbytes, XLogSegNo segno, uint32 offset)
 
 	MemSet(wal_encryption_buf, 0, sizeof(wal_encryption_buf));
 
-	pg_encrypt_data(page, *wal_encryption_buf, nbytes,
+	pg_encrypt_data(page, wal_encryption_buf, nbytes,
 			use_key, use_iv);
 
 	/******************************************************************/
