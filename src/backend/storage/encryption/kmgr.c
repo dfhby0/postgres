@@ -342,6 +342,7 @@ kmgr_wrap_key(keydata_t *key, keydata_t *in, keydata_t *out)
 	pg_wrap_key(key, TDE_KEK_SIZE,
 				in, EncryptionKeySize,
 				out, &out_size);
+
 	if (out_size != (EncryptionKeySize + TDE_DEK_WRAP_VALUE_SIZE))
 		return false;
 

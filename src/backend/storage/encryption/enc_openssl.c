@@ -13,9 +13,7 @@
  */
 
 #include "postgres.h"
-
 #include <unistd.h>
-
 #include "storage/enc_internal.h"
 #include "storage/enc_common.h"
 #include "utils/memutils.h"
@@ -24,6 +22,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/hmac.h>
+
 #ifdef HAVE_OPENSSL_KDF
 #include <openssl/kdf.h>
 #endif
@@ -38,11 +37,10 @@ typedef const EVP_CIPHER *(*ossl_EVP_cipher_func) (void);
  * Supported cipher function and its key size. The index of each cipher
  * is (data_encryption_cipher - 1).
  */
-ossl_EVP_cipher_func cipher_func_table[] =
-{
-	EVP_aes_128_ctr,	/* TDE_ENCRYPTION_AES_128 */
-	EVP_aes_256_ctr		/* TDE_ENCRYPTION_AES_256 */
-};
+/* AES128/192/256 various length definitions */
+#define PG_AES128_KEY_LEN			(128 / 8)
+#define PG_AES192_KEY_LEN			(192 / 8)
+#define PG_AES256_KEY_LEN			(256 / 8)
 
 typedef struct CipherCtx
 {
@@ -73,9 +71,16 @@ static EVP_PKEY_CTX *create_ossl_derive_ctx(void);
 static void setup_encryption_ossl(void);
 static void setup_encryption(void) ;
 
+
+
 static void
 createCipherContext(void)
 {
+	ossl_EVP_cipher_func cipher_func_table[] =
+	{
+		EVP_aes_128_ctr(),	/* TDE_ENCRYPTION_AES_128 */
+		EVP_aes_256_ctr()	/* TDE_ENCRYPTION_AES_256 */
+	};
 	ossl_EVP_cipher_func cipherfunc = cipher_func_table[data_encryption_cipher - 1];
 	MemoryContext old_ctx;
 	CipherCtx *cctx;
@@ -101,9 +106,9 @@ createCipherContext(void)
 											   false, false);
 
 	/* Create key wrap/unwrap contexts */
-	cctx->wrap_ctx = create_ossl_encryption_ctx(EVP_aes_256_wrap,
+	cctx->wrap_ctx = create_ossl_encryption_ctx(EVP_aes_256_wrap(),
 												32, true, true);
-	cctx->unwrap_ctx = create_ossl_encryption_ctx(EVP_aes_256_wrap,
+	cctx->unwrap_ctx = create_ossl_encryption_ctx(EVP_aes_256_wrap(),
 												  32, false, true);
 
 	/* Create key derivation context */
@@ -183,7 +188,22 @@ create_ossl_encryption_ctx(ossl_EVP_cipher_func func, int klen, bool isenc,
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
 
-
+	if(isenc)
+	{
+		if(!EVP_EncryptInit_ex(ctx, (const EVP_CIPHER *)func, NULL, NULL, NULL))
+			ereport(ERROR,
+				   (errmsg("openssl encountered error during EVP_EncryptInit_ex 1"),
+					(errdetail("openssl error string: %s",
+							   ERR_error_string(ERR_get_error(), NULL)))));
+	}
+	else
+		if(!EVP_DecryptInit_ex(ctx, (const EVP_CIPHER *)func, NULL, NULL, NULL))
+			ereport(ERROR,
+				   (errmsg("openssl encountered error during EVP_DecryptInit_ex 1"),
+					(errdetail("openssl error string: %s",
+							   ERR_error_string(ERR_get_error(), NULL)))));
+	EVP_CIPHER_CTX_set_key_length(ctx, klen);
+	EVP_CIPHER_CTX_set_padding(ctx, 1);
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -242,8 +262,35 @@ ossl_encrypt_data(const char *input, char *output, int size,
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	int tmplen = 0;
+	if(input==NULL)
+		puts("input is invalid during encryption");
+	else if(output==NULL)
+		puts("output is invalid during encryption");
+	else if(key==NULL)
+		puts("key is invalid during encryption");
+	else if(iv==NULL)
+		puts("iv is invalid during encryption");
 
-
+	if(!EVP_EncryptInit_ex(ctx, NULL, NULL, key, iv))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_EncryptInit_ex 2"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
+	if(!EVP_EncryptUpdate(ctx, output, &out_size, input, size))
+	{
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_EncryptUpdate"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
+	}
+	if(size % 16 != 0)
+		if(!EVP_EncryptFinal_ex(ctx, output + out_size, &tmplen))
+			ereport(ERROR,
+				   (errmsg("openssl encountered error during EVP_EncryptFinal_ex"),
+					(errdetail("openssl error string: %s",
+							   ERR_error_string(ERR_get_error(), NULL)))));
+	return output;
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -280,9 +327,34 @@ ossl_decrypt_data(const char *input, char *output, int size,
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	int tmplen;
+	if(input==NULL)
+		puts("input is invalid during encryption");
+	else if(output==NULL)
+		puts("output is invalid during encryption");
+	else if(key==NULL)
+		puts("key is invalid during encryption");
+	else if(iv==NULL)
+		puts("iv is invalid during encryption");
 
+	if(!EVP_DecryptInit_ex(ctx, NULL, NULL,key, iv))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_DecryptInit_ex 2"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
 
-
+	if(!EVP_DecryptUpdate(ctx, output, &out_size, input, size))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_DecryptUpdate"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
+	if(size % 16 != 0)
+		if(!EVP_DecryptFinal_ex(ctx, output + out_size, &tmplen))
+			ereport(ERROR,
+				   (errmsg("openssl encountered error during EVP_DecryptFinal_ex"),
+					(errdetail("openssl error string: %s",
+							   ERR_error_string(ERR_get_error(), NULL)))));
+	return output;
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
 }
@@ -353,11 +425,10 @@ ossl_compute_hmac(const unsigned char *hmac_key, int key_size,
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
-
-
-
+	HMAC(EVP_sha256(), hmac_key, key_size, data, data_size, hmac, NULL);
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
+
 }
 
 void
@@ -393,9 +464,19 @@ ossl_wrap_key(const unsigned char *key, int key_size, unsigned char *in,
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	if(in==NULL||out==NULL||key==NULL)
+		puts("input is invalid during encryption");
 
-
-
+	if(!EVP_EncryptInit_ex(ctx, NULL, NULL, key, NULL))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_EncryptInit_ex"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
+	if(!EVP_EncryptUpdate(ctx, out, out_size, in, in_size))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_EncryptUpdate"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
 }
@@ -433,8 +514,29 @@ ossl_unwrap_key(const unsigned char *key, int key_size, unsigned char *in,
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	if(in==NULL||out==NULL||key==NULL)
+		puts("input is invalid during encryption");
 
+	elog(WARNING, "[TDE] in_size %d..", in_size);
+	elog(WARNING, "[TDE] key_size %d..", key_size);
 
+	if(!EVP_DecryptInit_ex(ctx, NULL, NULL, key, NULL))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_DecryptInit_ex_wrap"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
+
+	if (!EVP_CIPHER_CTX_set_key_length(ctx, key_size))
+		ereport(ERROR,
+				(errmsg("openssl encountered setting key length error during unwrapping key"),
+	                 (errdetail("openssl error string: %s",
+	                            ERR_error_string(ERR_get_error(), NULL)))));
+
+	if(!EVP_DecryptUpdate(ctx, out, out_size, in, in_size))
+		ereport(ERROR,
+			   (errmsg("openssl encountered error during EVP_DecryptUpdate_wrap"),
+				(errdetail("openssl error string: %s",
+						   ERR_error_string(ERR_get_error(), NULL)))));
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);

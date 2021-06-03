@@ -51,7 +51,23 @@ set_wal_encryption_iv(XLogSegNo segment, uint32 offset)
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
 
+	uint32 pageno = offset / XLOG_BLCKSZ;
+	uint64 temp_segment = segment;
+	uint16 t = ENC_IV_SIZE;
 
+	while(pageno && t > 0)
+	{
+		p[--t] = (pageno % 10) - '0';
+		pageno /= 10;
+	}
+
+	while(temp_segment && t > 0)
+	{
+		p[--t] = (temp_segment % 10) - '0';
+		temp_segment /= 10;
+	}
+
+	while(t > 0)p[--t] = '6';
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -99,7 +115,14 @@ EncryptXLog(char *page, Size nbytes, XLogSegNo segno, uint32 offset)
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	set_wal_encryption_iv(segno, offset);
+	char *use_iv = wal_encryption_iv;
+	char *use_key = encryption_key_cache;
 
+	MemSet(wal_encryption_buf, 0, sizeof(wal_encryption_buf));
+
+	pg_encrypt_data(page, *wal_encryption_buf, nbytes,
+			use_key, use_iv);
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -149,8 +172,12 @@ DecryptXLog(char *page, Size nbytes, XLogSegNo segno, uint32 offset)
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	set_wal_encryption_iv(segno, offset);
+	char *use_iv = wal_encryption_iv;
+	char *use_key = encryption_key_cache;
 
-
+	pg_decrypt_data(page, page, nbytes,
+			use_key, use_iv);
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);

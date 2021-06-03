@@ -62,8 +62,14 @@ EncryptBufferBlock(BlockNumber blocknum, Page page)
 
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
+	elog(WARNING, "[TDE] set_buffer_encryption_iv %s...", buf_encryption_iv);
+	set_buffer_encryption_iv(page, blocknum);
+	elog(WARNING, "[TDE] set_buffer_encryption_iv %s...", buf_encryption_iv);
+	char *use_iv = buf_encryption_iv;
+	char *use_key = encryption_key_cache;
 
-
+	pg_encrypt_data((char*)page, (char*)page, sizeof(page),
+			use_key, use_iv);
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -110,7 +116,15 @@ DecryptBufferBlock(BlockNumber blocknum, Page page)
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
 
+	elog(WARNING, "[TDE] set_buffer_encryption_iv %s...", buf_encryption_iv);
+	set_buffer_encryption_iv(page, blocknum);
+	elog(WARNING, "[TDE] set_buffer_encryption_iv %s...", buf_encryption_iv);
 
+	char *use_iv = buf_encryption_iv;
+	char *use_key = encryption_key_cache;
+
+	pg_decrypt_data((char*)page, (char*)page, sizeof(page),
+			use_key, use_iv);
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
@@ -151,7 +165,30 @@ set_buffer_encryption_iv(Page page, BlockNumber blocknum)
 	elog(WARNING, "[TDE] Entering %s...", __FUNCTION__);
 	/******************* Your Code Starts Here ************************/
 
+	uint16 t = ENC_IV_SIZE;
+	uint32 temp_logid = ((PageHeader) page)->pd_lsn.xlogid;
+	uint32 temp_recoff = ((PageHeader) page)->pd_lsn.xrecoff;
+	unsigned int temp_blocknum = blocknum;
 
+	while(temp_blocknum && t > 0)
+	{
+		p[--t] = (temp_blocknum % 10) - '0';
+		temp_blocknum /= 10;
+	}
+
+	while(temp_logid && t > 0)
+	{
+		p[--t] = (temp_logid % 10) - '0';
+		temp_logid /= 10;
+	}
+
+	while(temp_recoff && t > 0)
+	{
+		p[--t] = (temp_blocknum % 10) - '0';
+		temp_recoff /= 10;
+	}
+
+	while(t > 0)p[--t] = '6';
 
 	/******************************************************************/
 	elog(WARNING, "[TDE] Leaving %s...", __FUNCTION__);
