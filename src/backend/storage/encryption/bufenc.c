@@ -68,7 +68,7 @@ EncryptBufferBlock(BlockNumber blocknum, Page page)
 	char *use_iv = buf_encryption_iv;
 	char *use_key = encryption_key_cache;
 
-	pg_encrypt_data((char*)page, (char*)page, sizeof(page),
+	pg_encrypt_data((char*)page + PageEncryptOffset, (char*)page + PageEncryptOffset, SizeOfPageEncryption,
 			use_key, use_iv);
 
 	/******************************************************************/
@@ -123,7 +123,7 @@ DecryptBufferBlock(BlockNumber blocknum, Page page)
 	char *use_iv = buf_encryption_iv;
 	char *use_key = encryption_key_cache;
 
-	pg_decrypt_data((char*)page, (char*)page, sizeof(page),
+	pg_decrypt_data((char*)page + PageEncryptOffset, (char*)page + PageEncryptOffset, SizeOfPageEncryption,
 			use_key, use_iv);
 
 	/******************************************************************/
